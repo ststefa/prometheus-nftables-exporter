@@ -98,6 +98,7 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
     log.info('startup complete')
     while True:
         log.debug('collecting metrics')
+        start = time.time()
         rules.set(len(fetch_nftables('ruleset', 'rule')))
         chains.set(len(fetch_nftables('ruleset', 'chain')))
         for item in fetch_nftables('counters', 'counter'):
@@ -115,6 +116,7 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
         for item in fetch_nftables('sets', 'set'):
             for labels, value in annotate_elements_with_country(item, geoip_db):
                 set_elements.labels(labels).set(value)
+        log.debug(f'Collected metrics in {time.time() - start}s')
         time.sleep(UPDATE_PERIOD)
 
 
@@ -131,6 +133,18 @@ def fetch_nftables(query_name, type_name):
     version = data['nftables'][0]['metainfo']['json_schema_version']
     if version != 1:
         raise RuntimeError(f'nftables json schema v{version} is not supported')
+    if query_name in [ 'sets', 'meters', 'maps' ] and len(data['nftables'][1:]) > 0:
+        log.debug(f"  iterating through {len(data['nftables'][1:])} {query_name}")
+        for item in data['nftables'][1:]:
+            process = subprocess.run(
+                ('nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name']),
+                capture_output=True,
+                check=True,
+                text=True,
+            )
+            item_data = json.loads(process.stdout)
+            if 'elem' in item_data['nftables'][1][type_name]:
+                item[type_name]['elem'] = item_data['nftables'][1][type_name]['elem']
     return [
         item[type_name]
         for item in data['nftables'][1:]
