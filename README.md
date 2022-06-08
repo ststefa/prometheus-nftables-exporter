@@ -2,7 +2,7 @@
 
 A Prometheus Exporter that exposes metrics from [nftables](https://nftables.org/projects/nftables/index.html).
 
-**Forged from dadevel/prometheus-nftables-exporter**
+**Forked from dadevel/prometheus-nftables-exporter**
 The upstream has been archived and newer nftables command-line clients introduced a breaking
 change by not listing elements when listing all sets, maps, or meters. This fork simply iterates
 through each to resolve.
