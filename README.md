@@ -86,11 +86,26 @@ nftables_meter_elements{family="ip6", name="http6-limit", table="filter", type="
 
 ## Build
 
-Install the dependencies and run the python script.
+Install the dependencies and run the python script. Usually you'll want to setup a virtual environment for that purpose to not mess up your global python installation:
 
 ~~~ bash
-pip3 install -r ./requirements.txt
-python3 ./main.py
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+(.venv) $ pip3 install -r ./requirements.txt
+...
+(.venv) $ python3 ./main.py -h
+usage: main.py ...
 ~~~
+
+The pyinstaller tool can be used to compile the exporter into a standalone executable:
+
+~~~ bash
+(.venv) $ pip3 install pyinstaller
+...
+(.venv) $ pyinstaller --onefile main.py
+...
+~~~
+
+This will result in a ready-to-run executable in the `dist/` directory which can be executed on other machines without installing a python interpreter there. Note that `pyinstaller` does not offer crosscompilation. The executable will thus only work on targets with the same os/arch combination. If you need multiple os/arch combination you'll have to compile the exporter seperately on any of these.
 
 The `Dockerfile` is available under [github.com/dadevel/dockerfiles](https://github.com/dadevel/dockerfiles/tree/main/nftables-exporter).
