@@ -15,6 +15,8 @@ The exposed metrics consist of
 
 Care must be taken that counter-names and comments are unique within the scope of a table. I.e. equality between a counter name and a comment will lead to wrong results. As will two identical comments or two identical counter-names. Whitespace in names should also be avoided for practical purpose.
 
+While it is convenient to expose packet/byte metrics just by adding a comment, this approach does not allow to sum up data originating from multiple rules. Named counters must be used in that case.
+
 ![Example Grafana Dashboard Screenshot](./images/grafana.png)
 
 ## Setup
@@ -59,7 +61,7 @@ usage: nftables_exporter.py ...
 The exporter can be configured using arguments and/or environment variables (args take precedence). Pythons argparse module is used so you can get a list of available args/vars by specifying `-h` or `--help` on the commandline.
 
 ~~~ bash
-$ python3 nftables_exporter.py -h
+(.venv) $ python3 nftables_exporter.py -h
 ...
 optional arguments:
   -h, --help            show this help message and exit
@@ -137,9 +139,9 @@ To compile the exporter into a standalone executable:
 
 This will result in a ready-to-run `dist/nftables_exporter` executable which can be used on other machines without installing a python interpreter there.
 
-Note that `pyinstaller` does not offer cross-compilation. The executable will thus only work on targets with the same os/arch combination. If you need multiple os/arch combination (say, amd64 and arm64) you'll have to compile the exporter separately on any of these.
+As a drawback, `pyinstaller` does not offer cross-compilation like golang. The executable will thus only work on targets with the same os/arch combination. If multiple os/arch combination must be supported (say, amd64 and arm64) then you'll have to compile the exporter separately on any of these :-/.
 
-The executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
+Also, note that the executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
 
 ~~~ bash
 $ ldd dist/nftables_exporter
