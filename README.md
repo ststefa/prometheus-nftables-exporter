@@ -207,5 +207,6 @@ It's important that the local and remote directories match. If you (like me) lik
 (.venv) $ python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client nftables_exporter.py
 ~~~
 
-Additional wisdom is available by using `python3 -m debugpy -h` or by visiting it's [repo](https://github.com/microsoft/debugpy/).
+Additional wisdom is available from `python3 -m debugpy -h` or the [repo](https://github.com/microsoft/debugpy/).
+
 - In VsCode, switch to `Run/Debug` view and attach using the configuration created above. You might want to create a breakpoint first ;).
