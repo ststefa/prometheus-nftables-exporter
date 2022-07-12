@@ -142,7 +142,7 @@ Note that `pyinstaller` does not offer cross-compilation. The executable will th
 The executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
 
 ~~~ bash
-$ ldd dist/main
+$ ldd dist/nftables_exporter
 	linux-vdso.so.1 (0x00007ffd18f4f000)
 	libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007fe31ec9d000)
 	libz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007fe31ec80000)
