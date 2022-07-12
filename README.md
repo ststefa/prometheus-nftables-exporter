@@ -141,7 +141,7 @@ To compile the exporter into a standalone executable:
 
 This will result in a ready-to-run `dist/nftables_exporter` executable which can be used on other machines without installing a python interpreter there.
 
-As a drawback, `pyinstaller` does not offer cross-compilation like golang. The executable will thus only work on targets with the same os/arch combination. If multiple os/arch combination must be supported (say, amd64 and arm64) then you'll have to compile the exporter separately on any of these :-/.
+Note that `pyinstaller` does not offer cross-compilation. The executable will thus only work on targets with the same os/arch combination. If you need multiple os/arch combination (say, amd64 and arm64) you'll have to compile the exporter separately on any of these.
 
 Also, note that the executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
 
