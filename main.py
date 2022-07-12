@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 import argparse
@@ -48,7 +48,7 @@ class EnvDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter   ):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=
-        'A Prometheus Exporter that exposes metrics from nftables (https://nftables.org/projects/nftables/index.html)',
+        'A Prometheus Exporter that exposes some of nftables (https://nftables.org/projects/nftables/index.html) state as scrapable metrics. This includes a) the size of certain objects (ruleset, chains, maps, sets) b) packet and byte values of named counters c) packet and byte values of rules that use a counter and addirionally specify a comment. Care must be taken that names/comments are unique within the scope of a table.',
         formatter_class=EnvDefaultsHelpFormatter)
     parser.add_argument( '-a', '--address', action=EnvDefault, envvar='NFTABLES_EXPORTER_ADDRESS',default='0.0.0.0', required=False, help='listen address')
     parser.add_argument( '-p', '--port', action=EnvDefault, envvar='NFTABLES_EXPORTER_PORT', type=int, default=9630, help='listen port')
@@ -68,23 +68,23 @@ def main():
     logging.basicConfig(level=args.loglevel.upper())
     log.info(f'Starting with args {vars(args)}')
 
-    metrics = get_prometheus_metrics(args.namespace)
+    metrics = build_prometheus_metrics(args.namespace)
     prometheus_client.start_http_server(addr=args.address, port=args.port)
 
     log.info(f'listing on {args.address}:{args.port}')
 
     if args.mmlicense and args.mmedition:
         import maxminddb
-        log.info('geoip lookup enabled')
+        log.info('Geoip lookup enabled')
         database_path = prepare_maxmind_database(args.mmlicense, args.mmedition, args.mmcachedir)
         with maxminddb.open_database(database_path.as_posix()) as database:
             collect_metrics(*metrics, update_interval=args.update, geoip_db=database)
     else:
-        log.info('geoip lookup disabled')
+        log.info('Geoip lookup disabled')
         collect_metrics(*metrics, update_interval=args.update)
 
 
-def get_prometheus_metrics(namespace:str):
+def build_prometheus_metrics(namespace:str):
     """Returns all prometheus metric objects."""
     return (
         DictGauge(
@@ -134,15 +134,31 @@ def get_prometheus_metrics(namespace:str):
 
 def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, update_interval, geoip_db=None):
     """Loops forever and periodically fetches data from nftables to update prometheus metrics."""
-    log.info('startup complete')
+    log.info('Startup complete')
     while True:
-        log.debug('collecting metrics')
+        log.debug('Collecting metrics')
         start = time.time()
-        rules.set(len(fetch_nftables('ruleset', 'rule')))
+
+        nft_rules=fetch_nftables('ruleset', 'rule')
+        rules.set(len(nft_rules))
+
+        commented_rules=[item for item in nft_rules if 'comment' in item.keys()]
+        if len(commented_rules) > 0:
+            log.debug(f"Iterating over {len(commented_rules)} rules with comments")
+            for item in commented_rules:
+                log.debug(f"  {item['comment']}")
+                if not 'counter' in item['expr'][1].keys():
+                    log.warning(f'Rule with comment "{item["comment"]}" does not specify a counter and cannot be used.')
+                else:
+                    counter_bytes.labels(item).set(item['expr'][1]['counter']['bytes'])
+                    counter_packets.labels(item).set(item['expr'][1]['counter']['packets'])
+
         chains.set(len(fetch_nftables('ruleset', 'chain')))
+
+        # Process explicitly declared nftables objects (counters, maps, ...)
         for item in fetch_nftables('counters', 'counter'):
-            counter_bytes.labels(item).set(item.get('bytes', 0))
-            counter_packets.labels(item).set(item.get('packets', 0))
+            counter_bytes.labels(item).set(item['bytes'])
+            counter_packets.labels(item).set(item['packets'])
         map_elements.reset()
         for item in fetch_nftables('maps', 'map'):
             for labels, value in annotate_elements_with_country(item, geoip_db):
@@ -155,6 +171,7 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
         for item in fetch_nftables('sets', 'set'):
             for labels, value in annotate_elements_with_country(item, geoip_db):
                 set_elements.labels(labels).set(value)
+
         log.debug(f'Collected metrics in {time.time() - start}s')
         time.sleep(update_interval)
 
@@ -168,9 +185,9 @@ def fetch_nftables(query_name, type_name):
 
         (or similar)
     """
-    log.debug(f'fetching nftables {query_name}')
+    log.debug(f'Fetching nftables {query_name}')
     cmd=('sudo', 'nft', '--json', 'list', query_name)
-    log.debug(f'running {cmd}')
+    log.debug(f"Running {' '.join(cmd)}")
     process = subprocess.run(
         cmd,
         capture_output=True,
@@ -182,10 +199,11 @@ def fetch_nftables(query_name, type_name):
     if version != 1:
         raise RuntimeError(f'nftables json schema v{version} is not supported')
     if query_name in [ 'sets', 'meters', 'maps' ] and len(data['nftables'][1:]) > 0:
-        log.debug(f"  iterating through {len(data['nftables'][1:])} {query_name}")
+        log.debug(f"Iterating over {len(data['nftables'][1:])} {query_name}")
         for item in data['nftables'][1:]:
+            log.debug(f"  {item[type_name]['name']}")
             cmd=('sudo', 'nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name'])
-            log.debug(f'running {cmd}')
+            log.debug(f"  Running {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -215,7 +233,7 @@ def annotate_elements_with_country(item, geoip_db):
                 country = lookup_ip_country(element['elem']['val'], geoip_db)
                 result[country] += 1
             else:
-                log.debug(f'got element of unexpected type {element.__class__.__name__} with {item=}')
+                log.debug(f'Got element of unexpected type {element.__class__.__name__} with {item=}')
         for country, value in result.items():
             yield dict(item, country=country), value
     else:
@@ -263,7 +281,7 @@ def download_maxmind_database_checksum(license_key, database_edition):
     with urllib.request.urlopen(checksum_url) as response:
         words = response.readline().split(maxsplit=1)
         checksum = words[0].decode()
-    log.debug(f'database checksum {checksum}')
+    log.debug(f'Database checksum {checksum}')
     return checksum
 
 
@@ -272,7 +290,7 @@ def download_maxmind_database_archive(license_key, database_edition, storage_dir
     """Downloads a maxmind database archive and validates its checksum."""
     archive_path = storage_dir/f'{database_edition}.tar.gz'
     if not archive_path.exists() or not verify_file_checksum(archive_path, checksum):
-        log.info('downloading maxmind geoip database')
+        log.info('Downloading maxmind geoip database')
         database_url = f'https://download.maxmind.com/app/geoip_download?edition_id={database_edition}&license_key={license_key}&suffix=tar.gz'
         urllib.request.urlretrieve(database_url, filename=archive_path)
     if not verify_file_checksum(archive_path, checksum):
@@ -286,7 +304,7 @@ def extract_maxmind_database_archive(database_edition, storage_dir, archive_path
     with tarfile.open(archive_path, 'r') as archive:
         archive.extractall(storage_dir)
     database_path = last(storage_dir.glob(f'{database_edition}_*/{database_edition}.mmdb'))
-    log.info(f'maxmind database stored at {database_path}')
+    log.info(f'Maxmind database stored at {database_path}')
     return database_path
 
 
@@ -308,12 +326,7 @@ def calculate_file_checksum(path):
 
 def last(iterable):
     """Returns the last element of an iterable."""
-    it = iter(iterable)
-    try:
-        while True:
-            result = next(it)
-    except StopIteration:
-        return result
+    return deque(iterable, maxlen=1).pop()
 
 
 def _filter_labels(data, labelnames):
@@ -346,6 +359,9 @@ class DictCounter(prometheus_client.Counter):
             for key, value in data.items()
             if key in self._labelnames
         }
+        # If there is no name than there must be a comment
+        if not 'name' in filtered_data.keys():
+            filtered_data['name'] = data['comment']
         return super().labels(**filtered_data)
 
     def set(self, data):
