@@ -50,8 +50,8 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 (.venv) $ pip3 install -r ./requirements.txt
 ...
-(.venv) $ python3 ./main.py -h
-usage: main.py ...
+(.venv) $ python3 ./nftables_exporter.py -h
+usage: nftables_exporter.py ...
 ~~~
 
 ## Configure
@@ -59,7 +59,7 @@ usage: main.py ...
 The exporter can be configured using arguments and/or environment variables (args take precedence). Pythons argparse module is used so you can get a list of available args/vars by specifying `-h` or `--help` on the commandline.
 
 ~~~ bash
-$ python3 main.py -h
+$ python3 nftables_exporter.py -h
 ...
 optional arguments:
   -h, --help            show this help message and exit
@@ -131,13 +131,13 @@ To compile the exporter into a standalone executable:
 ~~~ bash
 (.venv) $ pip3 install pyinstaller
 ...
-(.venv) $ pyinstaller --onefile main.py
+(.venv) $ pyinstaller --onefile nftables_exporter.py
 ...
 ~~~
 
-This will result in a ready-to-run executable in the `dist/` directory which can be used on other machines without installing a python interpreter there.
+This will result in a ready-to-run `dist/nftables_exporter` executable which can be used on other machines without installing a python interpreter there.
 
-Note that `pyinstaller` does not offer cross-compilation. The executable will thus only work on targets with the same os/arch combination. If you need multiple os/arch combination you'll have to compile the exporter separately on any of these.
+Note that `pyinstaller` does not offer cross-compilation. The executable will thus only work on targets with the same os/arch combination. If you need multiple os/arch combination (say, amd64 and arm64) you'll have to compile the exporter separately on any of these.
 
 The executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
 
@@ -202,7 +202,7 @@ It's important that the local and remote directories match. If you (like me) lik
 - Still on lemon, start the exporter using the debugger
 
 ~~~ bash
-(.venv) $ python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client main.py
+(.venv) $ python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client nftables_exporter.py
 ~~~
 
 Additional wisdom is available by using `python3 -m debugpy -h` or by visiting it's [repo](https://github.com/microsoft/debugpy/).
