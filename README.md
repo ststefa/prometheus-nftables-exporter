@@ -35,6 +35,8 @@ docker run -d -p 9639 --cap-drop all --cap-add net_admin --network host -e MAXMI
 
 ## Configure
 
+The exporter can be configured using arguments and/or environment variables. Arguments take precedence over environment variables. Pythons argparse module is used so you can get a list of available args by `-h` or `--help`.
+
 | Environment variable              | Description                                                             |
 |-----------------------------------|-------------------------------------------------------------------------|
 | `NFTABLES_EXPORTER_ADDRESS`       | listen address, listening on all network interfaces by default          |

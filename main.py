@@ -2,6 +2,7 @@
 from collections import defaultdict
 from pathlib import Path
 
+import argparse
 import hashlib
 import json
 import logging
@@ -14,86 +15,124 @@ import urllib.request, urllib.error
 
 log = logging.getLogger('nftables-exporter')
 
-try:
-    logging.basicConfig(level=os.environ.get('NFTABLES_EXPORTER_LOG_LEVEL', 'INFO').upper())
-    ADDRESS = os.environ.get('NFTABLES_EXPORTER_ADDRESS', '')
-    PORT = int(os.environ.get('NFTABLES_EXPORTER_PORT', 9630))
-    UPDATE_PERIOD = int(os.environ.get('NFTABLES_EXPORTER_UPDATE_PERIOD', 60))
-    NAMESPACE = os.environ.get('NFTABLES_EXPORTER_NAMESPACE', 'nftables')
-    MAXMIND_LICENSE_KEY = os.environ.get('MAXMIND_LICENSE_KEY')
-    MAXMIND_DATABASE_EDITION = os.environ.get('MAXMIND_DATABASE_EDITION', 'GeoLite2-Country')
-    MAXMIND_CACHE_DIRECTORY = Path(os.environ.get('MAXMIND_CACHE_DIRECTORY', './data/')).expanduser()
-except Exception as e:
-    raise RuntimeError('one or more environment variables are invalid') from e
+# based on https://stackoverflow.com/a/10551190
+class EnvDefault(argparse.Action):
+    """ Custom argparse action that adds the ability to use environment
+        variables as default (which can be overridden using regular args).
+    """
 
-if MAXMIND_LICENSE_KEY and MAXMIND_DATABASE_EDITION:
-    import maxminddb
+    def __init__(self, envvar, required=True, default=None, **kwargs):
+        self.envvar=envvar
+        if envvar in os.environ:
+            default = os.environ[envvar]
+        if required and default:
+            required = False
+        super(EnvDefault, self).__init__(default=default, required=required, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+
+# based on https://stackoverflow.com/a/24662215
+class EnvDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter   ):
+    """ Builds on top of argparse.ArgumentDefaultsHelpFormatter and appends
+        environment variable names (format '[envvar: <varname>]').
+    """
+
+    def _get_help_string(self, action):
+        help = super()._get_help_string(action)
+        if action.dest != 'help':
+            help += f' [envvar: {format(action.envvar)}]'
+        return help
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=
+        'A Prometheus Exporter that exposes metrics from nftables (https://nftables.org/projects/nftables/index.html)',
+        formatter_class=EnvDefaultsHelpFormatter)
+    parser.add_argument( '-a', '--address', action=EnvDefault, envvar='NFTABLES_EXPORTER_ADDRESS',default='0.0.0.0', required=False, help='listen address')
+    parser.add_argument( '-p', '--port', action=EnvDefault, envvar='NFTABLES_EXPORTER_PORT', type=int, default=9630, help='listen port')
+    parser.add_argument( '-u', '--update', action=EnvDefault, envvar='NFTABLES_EXPORTER_UPDATE_PERIOD', type=int, default=60, help='update interval in seconds')
+    parser.add_argument( '-n', '--namespace', action=EnvDefault, envvar='NFTABLES_EXPORTER_NAMESPACE', default='nftables', help='all metrics are prefixed with the namespace')
+    parser.add_argument( '-l', '--loglevel', action=EnvDefault, envvar='NFTABLES_EXPORTER_LOG_LEVEL', default="info", help='one of the log levels from pythons `logging` module')
+    parser.add_argument( '--mmlicense', action=EnvDefault, envvar='MAXMIND_LICENSE_KEY', required=False, help="license key for maxmind geoip database (optional)")
+    parser.add_argument( '--mmedition', action=EnvDefault, envvar='MAXMIND_DATABASE_EDITION', default="GeoLite2-Country", help='maxmind database edition')
+    parser.add_argument( '--mmcachedir', action=EnvDefault, envvar='MAXMIND_CACHE_DIRECTORY', default='./data', help='directory to store maxmind database in')
+
+    return parser.parse_args()
+
 
 
 def main():
-    """The main entry point."""
-    metrics = get_prometheus_metrics()
-    prometheus_client.start_http_server(addr=ADDRESS, port=PORT)
-    log.info(f'listing on {ADDRESS}:{PORT}')
-    if MAXMIND_LICENSE_KEY and MAXMIND_DATABASE_EDITION:
+    args=parse_args()
+    logging.basicConfig(level=args.loglevel.upper())
+    log.info(f'Starting with args {vars(args)}')
+
+    metrics = get_prometheus_metrics(args.namespace)
+    prometheus_client.start_http_server(addr=args.address, port=args.port)
+
+    log.info(f'listing on {args.address}:{args.port}')
+
+    if args.mmlicense and args.mmedition:
+        import maxminddb
         log.info('geoip lookup enabled')
-        database_path = prepare_maxmind_database(MAXMIND_LICENSE_KEY, MAXMIND_DATABASE_EDITION, MAXMIND_CACHE_DIRECTORY)
+        database_path = prepare_maxmind_database(args.mmlicense, args.mmedition, args.mmcachedir)
         with maxminddb.open_database(database_path.as_posix()) as database:
-            collect_metrics(*metrics, geoip_db=database)
+            collect_metrics(*metrics, update_interval=args.update, geoip_db=database)
     else:
         log.info('geoip lookup disabled')
-        collect_metrics(*metrics)
+        collect_metrics(*metrics, update_interval=args.update)
 
 
-def get_prometheus_metrics():
+def get_prometheus_metrics(namespace:str):
     """Returns all prometheus metric objects."""
     return (
         DictGauge(
             'chains',
             'Number of chains in nftables ruleset',
-            namespace=NAMESPACE,
+            namespace=namespace,
         ),
         DictGauge(
             'rules',
             'Number of rules in nftables ruleset',
-            namespace=NAMESPACE,
+            namespace=namespace,
         ),
         DictCounter(
             'counter_bytes',
             'Byte value of named nftables counters',
             labelnames=('family', 'table', 'name'),
-            namespace=NAMESPACE,
+            namespace=namespace,
             unit='bytes'
         ),
         DictCounter(
             'counter_packets',
             'Packet value of named nftables counters',
             labelnames=('family', 'table', 'name'),
-            namespace=NAMESPACE,
+            namespace=namespace,
             unit='packets'
         ),
         DictGauge(
             'map_elements',
             'Element count of named nftables maps',
             labelnames=('family', 'table', 'name', 'type', 'country'),
-            namespace=NAMESPACE,
+            namespace=namespace,
         ),
         DictGauge(
             'meter_elements',
             'Element count of named nftables meters',
             labelnames=('family', 'table', 'name', 'type', 'country'),
-            namespace=NAMESPACE,
+            namespace=namespace,
         ),
         DictGauge(
             'set_elements',
             'Element count of named nftables sets',
             labelnames=('family', 'table', 'name', 'type', 'country'),
-            namespace=NAMESPACE,
+            namespace=namespace,
         ),
     )
 
 
-def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, geoip_db=None):
+def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, update_interval, geoip_db=None):
     """Loops forever and periodically fetches data from nftables to update prometheus metrics."""
     log.info('startup complete')
     while True:
@@ -117,14 +156,23 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
             for labels, value in annotate_elements_with_country(item, geoip_db):
                 set_elements.labels(labels).set(value)
         log.debug(f'Collected metrics in {time.time() - start}s')
-        time.sleep(UPDATE_PERIOD)
+        time.sleep(update_interval)
 
 
 def fetch_nftables(query_name, type_name):
-    """Uses nft command line tool to fetch objects from nftables."""
+    """ Uses nft command line tool to fetch objects from nftables. Note that sudo
+        is used to perform the call. A proper sudo rule for the user running the
+        process is required. E.g. for a user called "nftables"
+
+            nftables   ALL=(root)    NOPASSWD:/usr/sbin/nft --json list *
+
+        (or similar)
+    """
     log.debug(f'fetching nftables {query_name}')
+    cmd=('sudo', 'nft', '--json', 'list', query_name)
+    log.debug(f'running {cmd}')
     process = subprocess.run(
-        ('nft', '--json', 'list', query_name),
+        cmd,
         capture_output=True,
         check=True,
         text=True,
@@ -136,8 +184,10 @@ def fetch_nftables(query_name, type_name):
     if query_name in [ 'sets', 'meters', 'maps' ] and len(data['nftables'][1:]) > 0:
         log.debug(f"  iterating through {len(data['nftables'][1:])} {query_name}")
         for item in data['nftables'][1:]:
+            cmd=('sudo', 'nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name'])
+            log.debug(f'running {cmd}')
             process = subprocess.run(
-                ('nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name']),
+                cmd,
                 capture_output=True,
                 check=True,
                 text=True,
