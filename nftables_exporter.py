@@ -135,45 +135,48 @@ def build_prometheus_metrics(namespace:str):
 def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, update_interval, geoip_db=None):
     """Loops forever and periodically fetches data from nftables to update prometheus metrics."""
     log.info('Startup complete')
-    while True:
-        log.debug('Collecting metrics')
-        start = time.time()
+    try:
+        while True:
+            log.debug('Collecting metrics')
+            start = time.time()
 
-        nft_rules=fetch_nftables('ruleset', 'rule')
-        rules.set(len(nft_rules))
+            nft_rules=fetch_nftables('ruleset', 'rule')
+            rules.set(len(nft_rules))
 
-        commented_rules=[item for item in nft_rules if 'comment' in item.keys()]
-        if len(commented_rules) > 0:
-            log.debug(f"Iterating over {len(commented_rules)} rules with comments")
-            for item in commented_rules:
-                log.debug(f"  {item['comment']}")
-                if not 'counter' in item['expr'][1].keys():
-                    log.warning(f'Rule with comment "{item["comment"]}" does not specify a counter and cannot be used.')
-                else:
-                    counter_bytes.labels(item).set(item['expr'][1]['counter']['bytes'])
-                    counter_packets.labels(item).set(item['expr'][1]['counter']['packets'])
+            commented_rules=[item for item in nft_rules if 'comment' in item.keys()]
+            if len(commented_rules) > 0:
+                log.debug(f"Iterating over {len(commented_rules)} rules with comments")
+                for item in commented_rules:
+                    log.debug(f"  {item['comment']}")
+                    if not 'counter' in item['expr'][1].keys():
+                        log.warning(f'Rule with comment "{item["comment"]}" does not specify a counter and cannot be used.')
+                    else:
+                        counter_bytes.labels(item).set(item['expr'][1]['counter']['bytes'])
+                        counter_packets.labels(item).set(item['expr'][1]['counter']['packets'])
 
-        chains.set(len(fetch_nftables('ruleset', 'chain')))
+            chains.set(len(fetch_nftables('ruleset', 'chain')))
 
-        # Process explicitly declared nftables objects (counters, maps, ...)
-        for item in fetch_nftables('counters', 'counter'):
-            counter_bytes.labels(item).set(item['bytes'])
-            counter_packets.labels(item).set(item['packets'])
-        map_elements.reset()
-        for item in fetch_nftables('maps', 'map'):
-            for labels, value in annotate_elements_with_country(item, geoip_db):
-                map_elements.labels(labels).set(value)
-        meter_elements.reset()
-        for item in fetch_nftables('meters', 'meter'):
-            for labels, value in annotate_elements_with_country(item, geoip_db):
-                meter_elements.labels(labels).set(value)
-        set_elements.reset()
-        for item in fetch_nftables('sets', 'set'):
-            for labels, value in annotate_elements_with_country(item, geoip_db):
-                set_elements.labels(labels).set(value)
+            # Process explicitly declared nftables objects (counters, maps, ...)
+            for item in fetch_nftables('counters', 'counter'):
+                counter_bytes.labels(item).set(item['bytes'])
+                counter_packets.labels(item).set(item['packets'])
+            map_elements.reset()
+            for item in fetch_nftables('maps', 'map'):
+                for labels, value in annotate_elements_with_country(item, geoip_db):
+                    map_elements.labels(labels).set(value)
+            meter_elements.reset()
+            for item in fetch_nftables('meters', 'meter'):
+                for labels, value in annotate_elements_with_country(item, geoip_db):
+                    meter_elements.labels(labels).set(value)
+            set_elements.reset()
+            for item in fetch_nftables('sets', 'set'):
+                for labels, value in annotate_elements_with_country(item, geoip_db):
+                    set_elements.labels(labels).set(value)
 
-        log.debug(f'Collected metrics in {time.time() - start}s')
-        time.sleep(update_interval)
+            log.debug(f'Collected metrics in {time.time() - start}s')
+            time.sleep(update_interval)
+    except KeyboardInterrupt:
+        log.info('Aborting query collection due to interrupt.')
 
 
 def fetch_nftables(query_name, type_name):
@@ -218,7 +221,6 @@ def fetch_nftables(query_name, type_name):
         for item in data['nftables'][1:]
         if type_name in item
     ]
-
 
 def annotate_elements_with_country(item, geoip_db):
     """Takes a nftables map, meter or set object and adds country code information to each ip address element."""
@@ -372,4 +374,7 @@ class DictCounter(prometheus_client.Counter):
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        log.info('Terminating on signal.')
