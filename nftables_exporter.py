@@ -55,8 +55,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument( '-u', '--update', action=EnvDefault, envvar='NFTABLES_EXPORTER_UPDATE_PERIOD', type=int, default=60, help='update interval in seconds')
     parser.add_argument( '-n', '--namespace', action=EnvDefault, envvar='NFTABLES_EXPORTER_NAMESPACE', default='nftables', help='all metrics are prefixed with the namespace')
     parser.add_argument( '-l', '--loglevel', action=EnvDefault, envvar='NFTABLES_EXPORTER_LOG_LEVEL', default="info", help='one of the log levels from pythons `logging` module')
-    parser.add_argument( '--mmlicense', action=EnvDefault, envvar='MAXMIND_LICENSE_KEY', required=False, help="license key for maxmind geoip database (optional)")
-    parser.add_argument( '--mmedition', action=EnvDefault, envvar='MAXMIND_DATABASE_EDITION', default="GeoLite2-Country", help='maxmind database edition')
+    parser.add_argument( '--mmlicense', action=EnvDefault, envvar='MAXMIND_LICENSE_KEY', required=False, help="license key for maxmind geoip database (optional, if not both mmlicense and mmedition are specified, the feature is disabled)")
+    parser.add_argument( '--mmedition', action=EnvDefault, envvar='MAXMIND_DATABASE_EDITION', default="GeoLite2-Country", help='maxmind database edition (optional, if not both mmedition and mmlicense are specified, the feature is disabled)')
     parser.add_argument( '--mmcachedir', action=EnvDefault, envvar='MAXMIND_CACHE_DIRECTORY', default='./data', help='directory to store maxmind database in')
 
     return parser.parse_args()
@@ -175,21 +175,21 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
 
             log.debug(f'Collected metrics in {time.time() - start}s')
             time.sleep(update_interval)
+    except subprocess.CalledProcessError as e:
+        log.error(f'Execution error running \"{" ".join(e.cmd)}\": {e.stderr}')
     except KeyboardInterrupt:
-        log.info('Aborting query collection due to interrupt.')
+        log.info('Aborting query collection due to keyboard interrupt.')
 
 
 def fetch_nftables(query_name, type_name):
-    """ Uses nft command line tool to fetch objects from nftables. Note that sudo
-        is used to perform the call. A proper sudo rule for the user running the
-        process is required. E.g. for a user called "nftables"
+    """ Uses nft command line tool to fetch objects from nftables.
 
             nftables   ALL=(root)    NOPASSWD:/usr/sbin/nft --json list *
 
         (or similar)
     """
     log.debug(f'Fetching nftables {query_name}')
-    cmd=('sudo', 'nft', '--json', 'list', query_name)
+    cmd=('nft', '--json', 'list', query_name)
     log.debug(f"Running {' '.join(cmd)}")
     process = subprocess.run(
         cmd,
@@ -205,7 +205,7 @@ def fetch_nftables(query_name, type_name):
         log.debug(f"Iterating over {len(data['nftables'][1:])} {query_name}")
         for item in data['nftables'][1:]:
             log.debug(f"  {item[type_name]['name']}")
-            cmd=('sudo', 'nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name'])
+            cmd=('nft', '--json', 'list', type_name, item[type_name]['family'], item[type_name]['table'], item[type_name]['name'])
             log.debug(f"  Running {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
@@ -377,4 +377,4 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        log.info('Terminating on signal.')
+        log.info('Terminating on interrupt signal.')
