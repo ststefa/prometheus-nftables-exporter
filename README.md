@@ -56,6 +56,8 @@ $ source .venv/bin/activate
 usage: nftables_exporter.py ...
 ~~~
 
+The exporter calls the `nft` command to obtain nftables data. `nft` requires the `cyp_net_admin` capability to do so. You can either run
+
 ## Configure
 
 The exporter can be configured using arguments and/or environment variables (args take precedence). Pythons argparse module is used so you can get a list of available args/vars by specifying `-h` or `--help` on the commandline.
