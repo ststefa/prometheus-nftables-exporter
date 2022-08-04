@@ -56,7 +56,9 @@ $ source .venv/bin/activate
 usage: nftables_exporter.py ...
 ~~~
 
-The exporter calls the `nft` command to obtain nftables data. `nft` requires the `cyp_net_admin` capability to do so. You can either run
+The exporter calls the `nft` command to obtain nftables data. `nft` requires the `cap_net_admin` capability to do so. You could use sudo to run as root and thereby obtain that capability. Unfortunately that interferes with the virtualenv setup as that is not inherited to the new process that sudo creates.
+
+One way around that is to perform your development with the root user directly but that cannot be recommended of course. Unfortunately I don't know any other way :-/.
 
 ## Configure
 
