@@ -1,0 +1,4 @@
+# To produce a standalone executable
+pyinstaller >= 5
+# To remotely debug using vscode
+debugpy == 1.*
