@@ -21,26 +21,19 @@ test:  ## Run tests
 
 .venv:
 	python3 -m venv .venv
-	pip3 install -r requirements.txt
+	. .venv/bin/activate ; pip3 install -Ur requirements.txt
 
-_active_venv: .venv
-	source .venv/bin/activate
+.venv/lib64/python3*/site-packages/PyInstaller: .venv
+	. .venv/bin/activate ; pip3 install pyinstaller
 
-compile: _active_venv ## Create build artifacts in dist/ directory
-	pyinstaller --onefile nftables_exporter.py
+dist/nftables-exporter: .venv/lib64/python3*/site-packages/PyInstaller ## Create executable
+	. .venv/bin/activate ; pyinstaller --onefile nftables-exporter.py
 
-.PHONY: image
-image:  ## Create docker image
+image: dist/nftables-exporter  ## Create docker image
 	docker build --tag $(EXEC_NAME) .
 
-.PHONY: my_multiarch_image
 my_multiarch_image:   ## Create multi-arch docker image and push it to docker hub (dev workaround, only usable for $ME). Note that multi-arch builds require additional docker setup!
 	docker buildx build --platform linux/amd64,linux/arm64/v8,linux/arm/v7 --tag $(ME)/$(EXEC_NAME) --push .
 
-.PHONY: image_test
-image_test:  ## Test the docker image
-	docker run --rm $(EXEC_NAME)
-
-.PHONY: clean
-clean: ## Remove build directory
-	rm -vfr build dist
+clean: ## Remove build artifacts and venv
+	rm -vfr build dist .venv

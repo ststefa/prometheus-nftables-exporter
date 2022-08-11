@@ -28,10 +28,12 @@ Just start the docker container.
 It requires the `net_admin` capability and must be part of the host network namespace in order to collect data from nftables.
 
 ~~~ bash
-docker run -d -p 9639 --cap-drop all --cap-add net_admin --network host ghcr.io/dadevel/nftables-exporter
+$ docker run --rm --cap-drop all --cap-add net_admin --network host ststefa/nftables-exporter
+INFO:nftables-exporter:Starting with args {'address': '0.0.0.0', 'port': 9630, 'update': 60, 'namespace': 'nftables', 'loglevel': 'info', 'mmlicense': None, 'mmedition': 'GeoLite2-Country', 'mmcachedir': './data'}
+...
 ~~~
 
-And test it.
+And test it:
 
 ~~~ bash
 curl http://localhost:9630/metrics
@@ -40,7 +42,7 @@ curl http://localhost:9630/metrics
 nftables-exporter can annotate ip addresses in nftables maps, meters and sets with a country code. You can use this for example with the [Grafana Worldmap Panel](https://github.com/grafana/worldmap-panel). Unfortunately you have provide a (free) MaxMind license key. See [here](https://dev.maxmind.com/geoip/geoip2/geolite2/) for more information.
 
 ~~~ bash
-docker run -d -p 9639 --cap-drop all --cap-add net_admin --network host -e MAXMIND_LICENSE_KEY=INSERT_YOUR_KEY_HERE ghcr.io/dadevel/nftables-exporter
+docker run --rm --cap-drop all --cap-add net_admin --network host ststefa/nftables-exporter --mmlicense INSERT_YOUR_KEY_HERE
 ~~~
 
 ### ... not using Docker
