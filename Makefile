@@ -32,8 +32,9 @@ dist/nftables-exporter: .venv/lib64/python3*/site-packages/PyInstaller ## Create
 image: dist/nftables-exporter  ## Create docker image
 	docker build --tag $(EXEC_NAME) .
 
+# Does not currently work because python multiarch fails
 my_multiarch_image:   ## Create multi-arch docker image and push it to docker hub (dev workaround, only usable for $ME). Note that multi-arch builds require additional docker setup!
-	docker buildx build --platform linux/amd64,linux/arm64/v8,linux/arm/v7 --tag $(ME)/$(EXEC_NAME) --push .
+	docker buildx build -f Dockerfile.multiarch --no-cache --platform linux/amd64,linux/arm64/v8,linux/arm/v7 --tag $(ME)/$(EXEC_NAME) --push .
 
 clean: ## Remove build artifacts and venv
 	rm -vfr build dist .venv

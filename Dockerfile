@@ -1,7 +1,7 @@
-## alpine does not work for linux/arm/v7, linux/arm64: "uname -rs" fails on pyinstaller setup
 FROM python:3.9.13-alpine
 RUN apk add nftables
 #FROM python:3.9-slim-bullseye
+#RUN apt-get update ; apt-get install -y nftables
 
 WORKDIR /app
 
