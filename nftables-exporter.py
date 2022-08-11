@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import prometheus_client
 import subprocess
 import tarfile
@@ -63,7 +64,7 @@ def parse_args() -> argparse.Namespace:
 
 
 
-def main():
+def main() -> bool:
     args=parse_args()
     logging.basicConfig(level=args.loglevel.upper())
     log.info(f'Starting with args {vars(args)}')
@@ -73,15 +74,17 @@ def main():
 
     log.info(f'listing on {args.address}:{args.port}')
 
+    cleanExit = True
     if args.mmlicense and args.mmedition:
         import maxminddb
         log.info('Geoip lookup enabled')
         database_path = prepare_maxmind_database(args.mmlicense, args.mmedition, args.mmcachedir)
         with maxminddb.open_database(database_path.as_posix()) as database:
-            collect_metrics(*metrics, update_interval=args.update, geoip_db=database)
+            cleanExit = collect_metrics(*metrics, update_interval=args.update, geoip_db=database)
     else:
         log.info('Geoip lookup disabled')
-        collect_metrics(*metrics, update_interval=args.update)
+        cleanExit = collect_metrics(*metrics, update_interval=args.update)
+    return cleanExit
 
 
 def build_prometheus_metrics(namespace:str):
@@ -132,7 +135,7 @@ def build_prometheus_metrics(namespace:str):
     )
 
 
-def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, update_interval, geoip_db=None):
+def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements, meter_elements, set_elements, update_interval, geoip_db=None) -> bool:
     """Loops forever and periodically fetches data from nftables to update prometheus metrics."""
     log.info('Startup complete')
     try:
@@ -177,8 +180,10 @@ def collect_metrics(chains, rules, counter_bytes, counter_packets, map_elements,
             time.sleep(update_interval)
     except subprocess.CalledProcessError as e:
         log.error(f'Execution error running \"{" ".join(e.cmd)}\": {e.stderr}')
+        return False
     except KeyboardInterrupt:
         log.info('Aborting query collection due to keyboard interrupt.')
+        return True
 
 
 def fetch_nftables(query_name, type_name):
@@ -375,6 +380,7 @@ class DictCounter(prometheus_client.Counter):
 
 if __name__ == '__main__':
     try:
-        main()
+        if not main():
+            sys.exit(1)
     except KeyboardInterrupt:
         log.info('Terminating on interrupt signal.')

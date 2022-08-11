@@ -1,0 +1,32 @@
+# Two-step build process to produce smaller result image
+
+# Abandoned due to incompatibilities with pyinstaller
+
+# build step
+## alpine does not work for linux/arm/v7, linux/arm64: "uname -rs" fails on pyinstaller setup
+#FROM python:3.9-alpine AS build
+#RUN apk add binutils
+# Debian has problems on linux/arm64, linux/arm/v7: /usr/sbin/dpkg-deb+/usr/sbin/dpkg-split missing
+FROM python:3.9-slim-bullseye AS build
+RUN apt-get update ; apt-get install -y binutils
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
+RUN pip install pyinstaller
+
+COPY nftables-exporter.py .
+RUN pyinstaller --onefile nftables-exporter.py
+
+# run step
+#FROM alpine
+#RUN apk add nftables
+FROM debian:bullseye-slim
+RUN apt-get update ; apt-get install -y nftables
+
+WORKDIR /app
+
+COPY --from=build /app/dist/nftables-exporter ./
+EXPOSE 9630
+ENTRYPOINT ["/app/nftables-exporter"]
