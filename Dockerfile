@@ -9,8 +9,8 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-COPY nftables_exporter.py .
+COPY nftables-exporter.py .
 
 EXPOSE 9630
 
-ENTRYPOINT ["/app/nftables_exporter.py"]
+ENTRYPOINT ["/app/nftables-exporter.py"]

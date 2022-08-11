@@ -16,8 +16,8 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 RUN pip install pyinstaller
 
-COPY nftables_exporter.py .
-RUN pyinstaller --onefile nftables_exporter.py
+COPY nftables-exporter.py .
+RUN pyinstaller --onefile nftables-exporter.py
 
 # run step
 #FROM alpine
@@ -27,6 +27,6 @@ RUN apt-get update ; apt-get install -y nftables
 
 WORKDIR /app
 
-COPY --from=build /app/dist/nftables_exporter ./
+COPY --from=build /app/dist/nftables-exporter ./
 EXPOSE 9630
-ENTRYPOINT ["/app/nftables_exporter"]
+ENTRYPOINT ["/app/nftables-exporter"]

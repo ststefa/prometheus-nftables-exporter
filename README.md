@@ -52,8 +52,8 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 (.venv) $ pip3 install -r ./requirements.txt
 ...
-(.venv) $ python3 ./nftables_exporter.py -h
-usage: nftables_exporter.py ...
+(.venv) $ python3 ./nftables-exporter.py -h
+usage: nftables-exporter.py ...
 ~~~
 
 The exporter calls the `nft` command to obtain nftables data. `nft` requires the `cap_net_admin` capability to do so. You could use sudo to run as root and thereby obtain that capability. Unfortunately that interferes with the virtualenv setup as that is not inherited to the new process that sudo creates.
@@ -65,7 +65,7 @@ One way around that is to perform your development with the root user directly b
 The exporter can be configured using arguments and/or environment variables (args take precedence). Pythons argparse module is used so you can get a list of available args/vars by specifying `-h` or `--help` on the commandline.
 
 ~~~ bash
-(.venv) $ python3 nftables_exporter.py -h
+(.venv) $ python3 nftables-exporter.py -h
 ...
 optional arguments:
   -h, --help            show this help message and exit
@@ -137,18 +137,18 @@ To compile the exporter into a standalone executable:
 ~~~ bash
 (.venv) $ pip3 install pyinstaller
 ...
-(.venv) $ pyinstaller --onefile nftables_exporter.py
+(.venv) $ pyinstaller --onefile nftables-exporter.py
 ...
 ~~~
 
-This will result in a ready-to-run `dist/nftables_exporter` executable which can be used on other machines without installing a python interpreter there.
+This will result in a ready-to-run `dist/nftables-exporter` executable which can be used on other machines without installing a python interpreter there.
 
 As a drawback, `pyinstaller` does not offer cross-compilation like golang. The executable will thus only work on targets with the same os/arch combination. If multiple os/arch combination must be supported (say, amd64 and arm64) then you'll have to compile the exporter separately on any of these :-/.
 
 Also, note that the executable is still dynamically linked. So care must be taken regarding the base system. However, this should not usually be a problem as the dependencies are quite minimal and broadly available.
 
 ~~~ bash
-$ ldd dist/nftables_exporter
+$ ldd dist/nftables-exporter
 	linux-vdso.so.1 (0x00007ffd18f4f000)
 	libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007fe31ec9d000)
 	libz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007fe31ec80000)
@@ -208,7 +208,7 @@ It's important that the local and remote directories match. If you (like me) lik
 - Still on lemon, start the exporter using the debugger
 
 ~~~ bash
-(.venv) $ python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client nftables_exporter.py
+(.venv) $ python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client nftables-exporter.py
 ~~~
 
 Additional wisdom is available from `python3 -m debugpy -h` or the [repo](https://github.com/microsoft/debugpy/).
